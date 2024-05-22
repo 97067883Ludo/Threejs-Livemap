@@ -1,19 +1,46 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import Stats from 'stats.js'
+import {TrackballControls} from "three/addons";
+import { SVGRenderer } from 'three/addons/renderers/SVGRenderer.js';
 
+
+let width = window.innerWidth;
+let viz_width = width;
+let height = window.innerHeight;
+
+let fov = 40;
+let near = 1;
+let far = 100000;
+let targetRotation = 0;
 
 const scene = new THREE.Scene();
-const camera = new THREE.OrthographicCamera(window.innerWidth / - 2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / - 2, 1, 10000);
-const renderer = new THREE.WebGLRenderer();
-const controls = new OrbitControls( camera, renderer.domElement );
-const stats = new Stats()
+scene.background = new THREE.Color(0xefefef);
+const camera = new THREE.PerspectiveCamera(  fov,
+    width / height,
+    near,
+    far );
+const renderer = new THREE.WebGLRenderer( {antialias: true} );
+const controls = new TrackballControls( camera, renderer.domElement );
 
-stats.showPanel(0)
-controls.enableRotate=false;
-controls.enableDamping=true;
-controls.dampingFactor=0.2;
-controls.zoomSpeed=1.5;
+controls.update();
+
+window.addEventListener('resize', () => {
+    width = window.innerWidth;
+    viz_width = width;
+    height = window.innerHeight;
+
+    renderer.setSize(width, height);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+})
+
+document.getElementById("rotate").addEventListener("click", () => {
+    if(targetRotation !== 0 ) {
+        return;
+    }
+    targetRotation = 90;
+
+});
+
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
 
@@ -24,32 +51,44 @@ const lineBasicMaterial = new THREE.LineBasicMaterial({
     linejoin:  'round'
 });
 
+camera.position.set(0, 0, 0);
 
-camera.rotation.z = 90 * Math.PI / 180
-camera.position.set(0, 0, 1);
+//camera.rotation.z = 0 * Math.PI / 180
 
 renderer.render(scene, camera);
-
-controls.update();
+let actualrotation = 0;
 
 function animate() {
-    requestAnimationFrame( animate );
+    requestAnimationFrame(animate);
     // required if controls.enableDamping or controls.autoRotate are set to true
-    controls.update();
+
+    if (targetRotation > 0) {
+        camera.rotation.z = (actualrotation += 10) * Math.PI / 180;
+        targetRotation -= 10;
+    }
+
     renderer.render( scene, camera );
 }
 
 animate();
+
 await logMovies();
 
 async function logMovies() {
-    const response = await fetch("json.txt");
-    const movies = await  response.json();
+    const response = await fetch("alpmamap.txt");
+    const map = await  response.json();
     let points = [];
-    //console.log(movies);
-    movies.segment_file_v2.segment_data.segment.forEach((object, index) => {
-        object.pts.sp.forEach((coordinates, index) => {
-            points.push( new THREE.Vector2(coordinates.x, coordinates.y))
+    console.log(map);
+    const centerX = (map.XMax  + map.XMin) / 2;
+    const centerY = (map.YMax + map.YMin) / 2;
+    const width = map.XMax - map.XMin;
+    const height = map.YMax - map.YMin;
+    const aspectRatio = window.innerWidth / window.innerHeight;
+    const cameraDistance = Math.max(width / (2 * Math.tan(Math.PI / 6)), height / (2 * aspectRatio * Math.tan(Math.PI / 6))) + 1000;
+
+    map.RouteSegments.forEach((object, index) => {
+        object.Points.forEach((coordinates, index) => {
+            points.push( new THREE.Vector2(coordinates.X, coordinates.Y))
             let sdfsdf = new THREE.BufferGeometry().setFromPoints( points );
             let line = new THREE.Line( sdfsdf, lineBasicMaterial );
             scene.add(line);
@@ -59,4 +98,5 @@ async function logMovies() {
         })
         points = [];
     })
+    camera.position.set(centerX, centerY, cameraDistance);
 }
